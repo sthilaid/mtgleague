@@ -40,13 +40,30 @@ def admin():
     txt += '<div><h2>Card Pool</h2></div>\n'
     return txt
 
+###############################################################################
+## Object Persistence
+
+class PersistentObject:
+    savepath = ""
+    def save(self):
+        pickle.dump(self, open(self.savepath, "wb+"))
+
+    @classmethod
+    def load(classObj):
+        data = classObj()
+        if os.path.isfile(classObj.savepath):
+            data = pickle.load(open(classObj.savepath, "rb"))
+        return data
+
+###############################################################################
+## Players
+
 class Player:
     def __init__(self, name):
         self.name = name
-        self.colros = []
 
-class PlayersDB:
-    player_data_file = 'd:/players.dat'
+class PlayersDB(PersistentObject):
+    savepath = 'players.dat'
     
     def __init__(self):
         self.players = []
@@ -58,16 +75,6 @@ class PlayersDB:
             return True
         else:
             return False
-
-    def save(self):
-        pickle.dump(self, open(PlayersDB.player_data_file, "wb+"))
-
-    @staticmethod
-    def load():
-        data = PlayersDB()
-        if os.path.isfile(PlayersDB.player_data_file):
-            data = pickle.load(open(PlayersDB.player_data_file, "rb"))
-        return data
 
 @app.route('/player', methods=['POST', 'GET'])
 def player():
@@ -83,6 +90,73 @@ def player():
         else:
             return "player already present..."
     return 'unknown command'
+
+###############################################################################
+## Seasons
+
+class Season():
+    def __init__(self, db, setname):
+        self.set = setname
+        self.registeredPlayers = []
+        self.matches = []
+        self.db = db
+    
+    def generateMatches(self):
+        self.match = [] # todo
+
+    def registerPlayer(name):
+        if name not in self.registerPlayer:
+            players = PlayersDB.load()
+            players.add(Player(name))
+            registerPlayer += [name]
+            db.save()
+
+class SeasonsDB(PersistentObject):
+    savepath = 'seasons.dat'
+
+    def __init__(self):
+        self.seasons = []
+
+    def newSeason(self, setname):
+        for s in self.seasons:
+            if s.set == s:
+                return False
+        self.seasons += [Season(self, setname)]
+        self.save()
+
+    def getSeason(self, setname):
+        for s in self.season:
+            if (s.set == setname):
+                return s
+        return False
+
+    def getLatestSeason(self):
+        seasonCount = len(self.seasons)
+        if (seasonCount == 0):
+            return False
+        else:
+            return self.seasons[seasonCount-1]
+        
+
+@app.route('/season', methods=['POST', 'GET'])
+def season():
+    cmd = request.args.get('cmd','')
+    seasons = SeasonsDB.load()
+    currentSeason = seasons.getLatestSeason()
+    if cmd == 'register':
+        name = request.args.get('player','')
+        if name != "" and currentSeason:
+            currentSeason.registerPlayer(name)
+            return "registered player: %s" % name
+    elif cmd == 'newseason':
+        set = request.args.get('set','')
+        if set != "":
+            if seasons.newSeason(set):
+                return "started season: %s" % set
+            else:
+                return "season: %s already started" % set
+    
+    return "unknown command"
         
 
 if __name__ == '__main__':
