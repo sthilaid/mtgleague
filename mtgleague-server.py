@@ -46,8 +46,10 @@ def admin():
 ## Object Persistence
 
 class JsonSerializable:
+    def shouldSerialize(self, k):
+        return True
+    
     def valueToJson(self, v):
-        print ("valueToJson(%s)" % v)
         if getattr(v, 'toJson', False):
             v = v.toJson()
         elif isinstance(v, list):
@@ -57,8 +59,9 @@ class JsonSerializable:
     def toJson(self):
         data = {}
         for k in self.__dict__:
-            v = self.valueToJson(self.__dict__[k])
-            data[k] = v
+            if self.shouldSerialize(k):
+                v = self.valueToJson(self.__dict__[k])
+                data[k] = v
         return [type(self).__name__, data]
 
     @classmethod
@@ -76,7 +79,6 @@ class JsonSerializable:
     
     @classmethod
     def fromJson(classobj, obj):
-        print("obj: %s" % obj)
         assert isinstance(obj, list)
         assert obj[0] == classobj.__name__
         data = obj[1]
@@ -160,7 +162,13 @@ class Season(JsonSerializable):
         self.matches = []
         self.rarePool = []
         self.db = db
-    
+
+    def shouldSerialize(self, k):
+        if k == "db":
+            return False
+        else:
+            super().shouldSerialize(k)
+
     def generateMatches(self):
         self.match = [] # todo
 
@@ -197,6 +205,13 @@ class SeasonsDB(PersistentObject, JsonSerializable):
 
     def __init__(self):
         self.seasons = []
+
+    @classmethod
+    def fromJson(classobj, obj):
+        db = super().fromJson(obj)
+        for s in db.seasons:
+            s.db = db
+        return db
 
     def newSeason(self, setname):
         for s in self.seasons:
@@ -251,3 +266,4 @@ def season():
 
 if __name__ == '__main__':
     app.run(debug=True)
+    
