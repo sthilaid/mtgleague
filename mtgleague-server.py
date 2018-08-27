@@ -50,6 +50,7 @@ class JsonSerializable:
         return True
     
     def valueToJson(self, v):
+        # print("valueToJson(%s)" % v)
         if getattr(v, 'toJson', False):
             v = v.toJson()
         elif isinstance(v, list):
@@ -57,6 +58,7 @@ class JsonSerializable:
         return v
     
     def toJson(self):
+        # print ("toJson(%s)" % self)
         data = {}
         for k in self.__dict__:
             if self.shouldSerialize(k):
@@ -66,9 +68,9 @@ class JsonSerializable:
 
     @classmethod
     def jsonToValue(classobj, jsonData):
-        # print ("jsonData(%s)" % jsonData)
-        if isinstance(jsonData, list):
-            if isinstance(jsonData[0], str) and jsonData[0] in globals():
+        # print ("jsonToValue(%s)" % jsonData)
+        if isinstance(jsonData, list) and len(jsonData) > 0:
+            if  isinstance(jsonData[0], str) and jsonData[0] in globals():
                 valueClassObj = globals()[jsonData[0]]
                 if hasattr(valueClassObj, 'fromJson'):
                     jsonData = valueClassObj.fromJson(jsonData)
@@ -79,6 +81,7 @@ class JsonSerializable:
     
     @classmethod
     def fromJson(classobj, obj):
+        # print("fromJson(%s)" % obj)
         assert isinstance(obj, list)
         assert obj[0] == classobj.__name__
         data = obj[1]
@@ -167,7 +170,7 @@ class Season(JsonSerializable):
         if k == "db":
             return False
         else:
-            super().shouldSerialize(k)
+            return super().shouldSerialize(k)
 
     def generateMatches(self):
         self.match = [] # todo
