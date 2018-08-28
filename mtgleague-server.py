@@ -117,7 +117,7 @@ class Player(JsonSerializable):
         self.name   = playerName
         self.id     = str(uuid.uuid3(uuid.NAMESPACE_URL, playerName))
 
-    def __repr__(self):
+    def __str__(self):
         return "[Player: %s id: %s]" % (self.name, self.id)
 
 class PlayersDB(PersistentObject, JsonSerializable):
@@ -126,7 +126,7 @@ class PlayersDB(PersistentObject, JsonSerializable):
     def __init__(self):
         self.players = []
 
-    def __repr__(self):
+    def __str__(self):
         return "[PlayersDB: %d elements]" % len(self.players)
 
     def add(self, newPlayerName):
@@ -165,7 +165,7 @@ class Season(JsonSerializable):
             self.deckColors = deckColors
             self.paid = False
 
-        def __repr__(self):
+        def __str__(self):
             return "[pinfo id: %s colors: %s, paid: %d]" % (self.playerId, self.deckColors, self.paid)
 
     class Match(JsonSerializable):
@@ -174,7 +174,7 @@ class Season(JsonSerializable):
             self.p2 = p2
             self.week = week
         
-        def __repr__(self):
+        def __str__(self):
             return "[match week %d: %s vs %s]" % (self.week, self.p1, self.p2)
 
     def __init__(self, db = None, setname = ""):
@@ -183,6 +183,9 @@ class Season(JsonSerializable):
         self.matches = []
         self.rarePool = []
         self.db = db
+    
+    def __str__(self):
+        return "[season set: %s, players: %d, rarePool: %d]" % (self.set, len(self.registeredPlayers), len(self.rarePool))
 
     def shouldSerialize(self, k):
         if k == "db":
@@ -211,6 +214,7 @@ class Season(JsonSerializable):
                 self.matches += [self.Match(ids[p1Idx], ids[p2Idx], week)]
 
         generateWeek(1)
+        self.db.save()
 
     def registerPlayer(self, name, deckColors = []):
         players = PlayersDB.load()
@@ -247,6 +251,12 @@ class SeasonsDB(PersistentObject, JsonSerializable):
 
     def __init__(self):
         self.seasons = []
+
+    def __str__(self):
+        out = "[SeasonsDB ["
+        for s in self.seasons:
+            out += "%s, " % s.set
+        return out + "]"
 
     @classmethod
     def fromJson(classobj, obj):
