@@ -6,6 +6,7 @@ import json
 # import pickle
 from mtgsdk import Card
 import os
+import random
 import uuid
 
 app = Flask(__name__)
@@ -116,16 +117,21 @@ class Player(JsonSerializable):
         self.name   = playerName
         self.id     = str(uuid.uuid3(uuid.NAMESPACE_URL, playerName))
 
+    def __repr__(self):
+        return "[Player: %s id: %s]" % (self.name, self.id)
+
 class PlayersDB(PersistentObject, JsonSerializable):
     savepath = 'players.dat'
     
     def __init__(self):
         self.players = []
 
+    def __repr__(self):
+        return "[PlayersDB: %d elements]" % len(self.players)
+
     def add(self, newPlayerName):
-        playerData = [p for p in self.players if p.name == newPlayerName]
-        playerFound = playerData != []
-        if playerFound:
+        playerData = next((p for p in self.players if p.name == newPlayerName), False)
+        if playerData:
             return playerData
         else:
             newPlayer = Player(newPlayerName)
@@ -154,10 +160,22 @@ def player():
 
 class Season(JsonSerializable):
     class PlayerInfo(JsonSerializable):
-        def __init__(self, id = ""):
+        def __init__(self, id = "", deckColors = []):
             self.playerId = id
-            self.deckColors = []
+            self.deckColors = deckColors
             self.paid = False
+
+        def __repr__(self):
+            return "[pinfo id: %s colors: %s, paid: %d]" % (self.playerId, self.deckColors, self.paid)
+
+    class Match(JsonSerializable):
+        def __init__(self, p1, p2, week):
+            self.p1 = p1
+            self.p2 = p2
+            self.week = week
+        
+        def __repr__(self):
+            return "[match week %d: %s vs %s]" % (self.week, self.p1, self.p2)
 
     def __init__(self, db = None, setname = ""):
         self.set = setname
@@ -173,15 +191,36 @@ class Season(JsonSerializable):
             return super().shouldSerialize(k)
 
     def generateMatches(self):
-        self.match = [] # todo
+        def generateWeek(week):
+            playerCount = len(self.registeredPlayers)
+            ids = [p.playerId for p in self.registeredPlayers]
+            if playerCount % 2 == 1:
+                ids += [""]
 
-    def registerPlayer(self, name):
+            for i in range(playerCount**2):
+                idx1 = random.randrange(playerCount)
+                idx2 = random.randrange(playerCount)
+                tmp = ids[idx1]
+                ids[idx1] = ids[idx2]
+                ids[idx2] = tmp
+
+            matchCount = playerCount // 2 + playerCount % 2
+            for m in range(matchCount):
+                p1Idx = m*2
+                p2Idx = m*2+1
+                self.matches += [self.Match(ids[p1Idx], ids[p2Idx], week)]
+
+        generateWeek(1)
+
+    def registerPlayer(self, name, deckColors = []):
         players = PlayersDB.load()
-        playerData = players.add(name)
-        isRegistered = next((p for p in self.registeredPlayers if playerData.id == p.playerId), False)
-        if not isRegistered:
-            self.registeredPlayers += [Season.PlayerInfo(playerData.id)]
-            db.save()
+        playerData = players.add(name) # ensure player is in player db
+        playerInfo = next((p for p in self.registeredPlayers if playerData.id == p.playerId), False)
+        if playerInfo:
+            playerInfo.deckColors = deckColors
+        else:
+            self.registeredPlayers += [Season.PlayerInfo(playerData.id, deckColors)]
+        self.db.save()
 
     def addToRaresPool(self, cardIds):
         for newRareId in cardIds:
@@ -193,7 +232,7 @@ class Season(JsonSerializable):
                     break
             if not added:
                 self.rarePool += [{'id' : newRareId, 'count' : 1}]
-        db.save()
+        self.db.save()
 
     def removeRaresFromPool(self, cardIds):
         for rareId in cardIds:
@@ -201,7 +240,7 @@ class Season(JsonSerializable):
                 if r['id'] == rareId:
                     r['count'] -= 1
         self.rarePool = [r for r in self.rarePool if r['count'] > 0]
-        db.save()
+        self.db.save()
     
 class SeasonsDB(PersistentObject, JsonSerializable):
     savepath = 'seasons.dat'
