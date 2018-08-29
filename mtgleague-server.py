@@ -2,8 +2,8 @@
 
 from flask import Flask
 from flask import request
+import functools
 import json
-# import pickle
 from mtgsdk import Card
 import os
 import random
@@ -96,6 +96,18 @@ class JsonSerializable:
             instance.__dict__[k] = v
         return instance
 
+class jsonSerializableObj:
+    serializableClasses = []
+
+    def __init__(self, cls):
+        functools.update_wrapper(self, cls)
+        bases = (JsonSerializable,) if len(cls.__bases__) == 1 and cls.__bases__[0] == object else cls.__bases__+(JsonSerializable,)
+        self.cls = type(cls.__name__, bases, dict(cls.__dict__))
+        jsonSerializableObj.serializableClasses += [cls.__name__]
+
+    def __call__(self, *args, **kwargs):
+        return self.cls(*args, **kwargs)
+
 class PersistentObject:
     savepath = ""
     def save(self):
@@ -116,7 +128,8 @@ class PersistentObject:
 ###############################################################################
 ## Players
 
-class Player(JsonSerializable):
+@jsonSerializableObj
+class Player():
     def __init__(self, playerName = ""):
         self.name   = playerName
         self.id     = str(uuid.uuid3(uuid.NAMESPACE_URL, playerName))
@@ -124,7 +137,8 @@ class Player(JsonSerializable):
     def __str__(self):
         return "[Player: %s id: %s]" % (self.name, self.id)
 
-class PlayersDB(PersistentObject, JsonSerializable):
+@jsonSerializableObj
+class PlayersDB(PersistentObject):
     savepath = 'players.dat'
     
     def __init__(self):
