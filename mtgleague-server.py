@@ -46,6 +46,10 @@ def admin():
 ###############################################################################
 ## Object Persistence
 
+# todo: defien decorator that can keep track of all the serializable instance
+# and look in that list while desirializing instead of in globals(). the
+# decorator can then add JsonSerializable as a subclass while decorating...?
+
 class JsonSerializable:
     def shouldSerialize(self, k):
         return True
@@ -169,7 +173,7 @@ class Season(JsonSerializable):
             return "[pinfo id: %s colors: %s, paid: %d]" % (self.playerId, self.deckColors, self.paid)
 
     class Match(JsonSerializable):
-        def __init__(self, p1, p2, week):
+        def __init__(self, p1, p2, week=0):
             self.p1 = p1
             self.p2 = p2
             self.week = week
@@ -194,26 +198,13 @@ class Season(JsonSerializable):
             return super().shouldSerialize(k)
 
     def generateMatches(self):
-        def generateWeek(week):
-            playerCount = len(self.registeredPlayers)
-            ids = [p.playerId for p in self.registeredPlayers]
-            if playerCount % 2 == 1:
-                ids += [""]
-
-            for i in range(playerCount**2):
-                idx1 = random.randrange(playerCount)
-                idx2 = random.randrange(playerCount)
-                tmp = ids[idx1]
-                ids[idx1] = ids[idx2]
-                ids[idx2] = tmp
-
-            matchCount = playerCount // 2 + playerCount % 2
-            for m in range(matchCount):
-                p1Idx = m*2
-                p2Idx = m*2+1
-                self.matches += [self.Match(ids[p1Idx], ids[p2Idx], week)]
-
-        generateWeek(1)
+        matchups = [[Match(p1.playerId, p2.playerId) for p2 in self.registeredPlayers if p1.playerId != p2.playerId] for p1 in self.registeredPlayers]
+        for playerMatchups in matchups:
+            for w in range(7):
+                playerMatchups[w].week = w
+                alreadyPlaying = next((m for m in self.matches if m.p1 == playerMatchups[w].p1 or m.p2 == playerMatchups[w].p1), False)
+                if not alreadyPlaying:
+                    self.matches += playerMatchups[w]
         self.db.save()
 
     def registerPlayer(self, name, deckColors = []):
@@ -225,6 +216,12 @@ class Season(JsonSerializable):
         else:
             self.registeredPlayers += [Season.PlayerInfo(playerData.id, deckColors)]
         self.db.save()
+
+    def getPlayerInfo(self, id):
+        for p in self.registeredPlayers:
+            if p.playerId == id:
+                return p
+        assert False, "Unknown player %s" % id
 
     def addToRaresPool(self, cardIds):
         for newRareId in cardIds:
