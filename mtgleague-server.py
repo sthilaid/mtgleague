@@ -73,12 +73,12 @@ class JsonSerializable:
 
     @classmethod
     def jsonToValue(classobj, jsonData):
-        # print ("jsonToValue(%s)" % jsonData)
+        print ("jsonToValue(%s)" % jsonData)
         if isinstance(jsonData, list) and len(jsonData) > 0:
-            if  isinstance(jsonData[0], str) and jsonData[0] in globals():
-                valueClassObj = globals()[jsonData[0]]
-                if hasattr(valueClassObj, 'fromJson'):
-                    jsonData = valueClassObj.fromJson(jsonData)
+            serializableClass = next((c for c in jsonSerializableObj.classes if c.__name__ == jsonData[0]), False)
+            if serializableClass:
+                if hasattr(serializableClass, 'fromJson'):
+                    jsonData = serializableClass.fromJson(jsonData)
             else:
                 jsonData = [classobj.jsonToValue(el) for el in jsonData]
             
@@ -86,7 +86,7 @@ class JsonSerializable:
     
     @classmethod
     def fromJson(classobj, obj):
-        # print("fromJson(%s)" % obj)
+        print("fromJson(%s)" % obj)
         assert isinstance(obj, list)
         assert obj[0] == classobj.__name__
         data = obj[1]
@@ -97,13 +97,13 @@ class JsonSerializable:
         return instance
 
 class jsonSerializableObj:
-    serializableClasses = []
+    classes = []
 
     def __init__(self, cls):
         functools.update_wrapper(self, cls)
         bases = (JsonSerializable,) if len(cls.__bases__) == 1 and cls.__bases__[0] == object else cls.__bases__+(JsonSerializable,)
         self.cls = type(cls.__name__, bases, dict(cls.__dict__))
-        jsonSerializableObj.serializableClasses += [cls.__name__]
+        jsonSerializableObj.classes += [self.cls]
 
     def __call__(self, *args, **kwargs):
         return self.cls(*args, **kwargs)
