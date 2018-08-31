@@ -155,7 +155,10 @@ class PlayersDB(PersistentObject):
         else:
             newPlayer = Player(newPlayerName)
             self.players += [newPlayer]
-            return newPlayer
+            playerData = newPlayer
+
+        self.save()
+        return playerData
     
     def get(self, name):
         for p in self.players:
@@ -195,9 +198,16 @@ class Season():
             self.p1 = p1
             self.p2 = p2
             self.week = week
-        
+            self.score = (0, 0) # (p1, p2)
+
+        def isMatchup(self, p1, p2):
+            return (self.p1 == p1 or self.p2 == p1) and (self.p1 == p2 or self.p2 == p2)
+    
         def __str__(self):
-            return "[match week %d: %s vs %s]" % (self.week, self.p1, self.p2)
+            players = PlayersDB.load()
+            p1 = next((p.name for p in players.players if p.id == self.p1), False)
+            p2 = next((p.name for p in players.players if p.id == self.p2), False)
+            return "[match week %d: %s %d vs %s %d]" % (self.week, p1, self.score[0], p2, self.score[1])
 
     def __init__(self, db = None, setname = ""):
         self.set = setname
@@ -215,22 +225,30 @@ class Season():
         else:
             return super().shouldSerialize(k)
 
+    def isMatchup(self, p1, p2):
+        return next((m for m in self.matches if m.isMatchup(p1, p2)), False)
+    
     def generateMatches(self):
-        def isAlreadyPlayer(p1, p2):
-            for m in self.matches:
-                if (m.p1 == p1 or m.p2 == p1) and (m.p1 == p2 or m.p2 == p2):
-                    return True
-            return False
-        
         matchups = [[self.Match(p1.playerId, p2.playerId) for p2 in self.registeredPlayers if p1.playerId != p2.playerId] for p1 in self.registeredPlayers]
+        matchups = [random.sample(playerMatchups, len(playerMatchups)) for playerMatchups in matchups]
+        
         for playerMatchups in matchups:
             weekNum = min(7, len(matchups[0]))
             for w in range(weekNum):
-                nextOpponent = next((m for m in playerMatchups if not isAlreadyPlayer(m.p1, m.p2)), False)
+                nextOpponent = next((m for m in playerMatchups if not self.isMatchup(m.p1, m.p2)), False)
                 if nextOpponent:
                     nextOpponent.week = w
                     self.matches += [nextOpponent]
         self.db.save()
+
+    def updateMatchScore(self, p1Name, p2Name, p1Score, p2Score):
+        players = PlayersDB.load()
+        p1 = players.get(p1Name)
+        p2 = players.get(p2Name)
+        match = next((m for m in self.matches if m.isMatchup(p1.id, p2.id)), False)
+        if (match):
+            match.score = (p1Score, p2Score)
+            self.db.save()
 
     def registerPlayer(self, name, deckColors = []):
         players = PlayersDB.load()
