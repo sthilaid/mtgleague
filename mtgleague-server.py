@@ -73,9 +73,9 @@ class JsonSerializable:
 
     @classmethod
     def jsonToValue(classobj, jsonData):
-        print ("jsonToValue(%s)" % jsonData)
+        # print ("jsonToValue(%s)" % jsonData)
         if isinstance(jsonData, list) and len(jsonData) > 0:
-            serializableClass = next((c for c in jsonSerializableObj.classes if c.__name__ == jsonData[0]), False)
+            serializableClass = next((c for c in serializableClasses.classes if c.__name__ == jsonData[0]), False)
             if serializableClass:
                 if hasattr(serializableClass, 'fromJson'):
                     jsonData = serializableClass.fromJson(jsonData)
@@ -86,7 +86,7 @@ class JsonSerializable:
     
     @classmethod
     def fromJson(classobj, obj):
-        print("fromJson(%s)" % obj)
+        # print("fromJson(%s)" % obj)
         assert isinstance(obj, list)
         assert obj[0] == classobj.__name__
         data = obj[1]
@@ -96,17 +96,18 @@ class JsonSerializable:
             instance.__dict__[k] = v
         return instance
 
-class jsonSerializableObj:
+class serializableClasses:
     classes = []
+    
+def jsonSerializableObj(cls):
+    class newClass(cls, JsonSerializable):
+        pass
 
-    def __init__(self, cls):
-        functools.update_wrapper(self, cls)
-        bases = (JsonSerializable,) if len(cls.__bases__) == 1 and cls.__bases__[0] == object else cls.__bases__+(JsonSerializable,)
-        self.cls = type(cls.__name__, bases, dict(cls.__dict__))
-        jsonSerializableObj.classes += [self.cls]
-
-    def __call__(self, *args, **kwargs):
-        return self.cls(*args, **kwargs)
+    newClass.__name__ = cls.__name__
+    newClass.__wrapped__ = cls
+    serializableClasses.classes += [newClass]
+    return newClass
+    
 
 class PersistentObject:
     savepath = ""
@@ -176,8 +177,10 @@ def player():
 ###############################################################################
 ## Seasons
 
-class Season(JsonSerializable):
-    class PlayerInfo(JsonSerializable):
+@jsonSerializableObj
+class Season():
+    @jsonSerializableObj
+    class PlayerInfo():
         def __init__(self, id = "", deckColors = []):
             self.playerId = id
             self.deckColors = deckColors
@@ -186,8 +189,9 @@ class Season(JsonSerializable):
         def __str__(self):
             return "[pinfo id: %s colors: %s, paid: %d]" % (self.playerId, self.deckColors, self.paid)
 
-    class Match(JsonSerializable):
-        def __init__(self, p1, p2, week=0):
+    @jsonSerializableObj
+    class Match():
+        def __init__(self, p1 = "", p2 = "", week=0):
             self.p1 = p1
             self.p2 = p2
             self.week = week
@@ -212,13 +216,20 @@ class Season(JsonSerializable):
             return super().shouldSerialize(k)
 
     def generateMatches(self):
-        matchups = [[Match(p1.playerId, p2.playerId) for p2 in self.registeredPlayers if p1.playerId != p2.playerId] for p1 in self.registeredPlayers]
+        def isAlreadyPlayer(p1, p2):
+            for m in self.matches:
+                if (m.p1 == p1 or m.p2 == p1) and (m.p1 == p2 or m.p2 == p2):
+                    return True
+            return False
+        
+        matchups = [[self.Match(p1.playerId, p2.playerId) for p2 in self.registeredPlayers if p1.playerId != p2.playerId] for p1 in self.registeredPlayers]
         for playerMatchups in matchups:
-            for w in range(7):
-                playerMatchups[w].week = w
-                alreadyPlaying = next((m for m in self.matches if m.p1 == playerMatchups[w].p1 or m.p2 == playerMatchups[w].p1), False)
-                if not alreadyPlaying:
-                    self.matches += playerMatchups[w]
+            weekNum = min(7, len(matchups[0]))
+            for w in range(weekNum):
+                nextOpponent = next((m for m in playerMatchups if not isAlreadyPlayer(m.p1, m.p2)), False)
+                if nextOpponent:
+                    nextOpponent.week = w
+                    self.matches += [nextOpponent]
         self.db.save()
 
     def registerPlayer(self, name, deckColors = []):
@@ -256,8 +267,9 @@ class Season(JsonSerializable):
                     r['count'] -= 1
         self.rarePool = [r for r in self.rarePool if r['count'] > 0]
         self.db.save()
-    
-class SeasonsDB(PersistentObject, JsonSerializable):
+
+@jsonSerializableObj
+class SeasonsDB(PersistentObject):
     savepath = 'seasons.dat'
 
     def __init__(self):
