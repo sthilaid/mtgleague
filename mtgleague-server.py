@@ -5,11 +5,12 @@ from flask import request
 import functools
 import json
 from mtgsdk import Card
+from mtgsdk import Set
 import os
 import random
 import uuid
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static")
 
 def getCards():
     cards = Card.where(supertypes='legendary') \
@@ -342,7 +343,7 @@ def season():
         else:
             currentSeason.registerPlayer(name)
             return "registered player: %s" % name
-    elif cmd == 'newseason':
+    elif cmd == 'new':
         set = request.args.get('set','')
         if set == "":
             return "invalid set name..."
@@ -353,10 +354,27 @@ def season():
                 return "couldn't start new season %s" % set
     
     return "unknown command"
+
+@app.route('/newseason', methods=['POST', 'GET'])
+def newseason():
+    page = ""
+    sets = Set.all()
+    sets = [s for s in sets if s.type == 'core' or s.type == 'expansion']
+    list.sort(sets, key=lambda s: s.release_date, reverse=True)
+    page += "<script src='static/mtgleague.js?test=123456'></script>"
+    page += '<select id="setname" onclick="newseason.updateStatus()">'
+    for set in sets:
+        setId = set.code
+        setInfo = "%s [%s - %s]" % (set.name, set.type, set.release_date)
+        page += "<option value='%s'>%s</option>" % (setId, setInfo)
+    page += '</select>'
+    page += '<button onclick="newseason.send()">create</button><br/>'
+    page += '<div>status: <div id="status"></div></div>'
+    return page
+
         
 ###############################################################################
 ## main
 
 if __name__ == '__main__':
     app.run(debug=True)
-    
