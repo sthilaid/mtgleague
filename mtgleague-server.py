@@ -1,5 +1,6 @@
 #!flask/bin/python
 
+import datetime
 from flask import Flask
 from flask import request
 import functools
@@ -189,6 +190,7 @@ class Season():
             self.playerId = id
             self.deckColors = deckColors
             self.paid = False
+            self.rareTokens = 0
 
         def __str__(self):
             return "[pinfo id: %s colors: %s, paid: %d]" % (self.playerId, self.deckColors, self.paid)
@@ -216,6 +218,7 @@ class Season():
         self.matches = []
         self.rarePool = []
         self.db = db
+        self.startDate = datetime.datetime.now().isoformat(' ')
     
     def __str__(self):
         return "[season set: %s, players: %d, rarePool: %d]" % (self.set, len(self.registeredPlayers), len(self.rarePool))
@@ -327,9 +330,12 @@ class SeasonsDB(PersistentObject):
             return False
         else:
             return self.seasons[seasonCount-1]
-        
 
-@app.route('/season', methods=['POST', 'GET'])
+    @staticmethod
+    def reset():
+        SeasonsDB().save()
+
+@app.route('/season-api', methods=['POST', 'GET'])
 def season():
     cmd = request.args.get('cmd','')
     seasons = SeasonsDB.load()
@@ -337,39 +343,54 @@ def season():
     if cmd == 'register':
         name = request.args.get('player','')
         if not currentSeason:
-            return "no seasons started"
+            return "no seasons started", 404 # not found
         elif name == "":
-            return "invalid player name"
+            return "invalid player name", 406 # not acceptable
         else:
             currentSeason.registerPlayer(name)
-            return "registered player: %s" % name
+            return "registered player: %s" % name, 200 # OK
     elif cmd == 'new':
         set = request.args.get('set','')
         if set == "":
-            return "invalid set name..."
+            return "invalid set name...", 406 # not acceptable
         else:
             if seasons.newSeason(set):
-                return "started season: %s" % set
+                return "started season: %s" % set, 201 # created
             else:
-                return "couldn't start new season %s" % set
-    
-    return "unknown command"
+                return "couldn't start new season %s" % set, 406 # not acceptable
+    elif cmd == 'isExisting':
+        set = request.args.get('set','')
+        season = next((s for s in seasons.seasons if s.set == set), False)
+        return season.startDate if bool(season) else "false", 200 # OK
 
-@app.route('/newseason', methods=['POST', 'GET'])
+    elif cmd == 'getMatches':
+        set = request.args.get('seasonSet','')
+        week = request.args.get('week','')
+        season = next((s for s in seasons.seasons if s.set == set), False)
+        if not bool(season) or week == '':
+            return "bad request", 406 # not acceptable
+        # return [m for m in season.matches if m.week == week]
+        return 'todo', 200
+    
+    return "unknown command", 400 # bad request
+
+@app.route('/season', methods=['POST', 'GET'])
 def newseason():
     page = ""
     sets = Set.all()
     sets = [s for s in sets if s.type == 'core' or s.type == 'expansion']
     list.sort(sets, key=lambda s: s.release_date, reverse=True)
-    page += "<script src='static/mtgleague.js?test=123456'></script>"
-    page += '<select id="setname" onclick="newseason.updateStatus()">'
+    page += "<script src='static/mtgleague.js?test=%s'></script>" % uuid.uuid4()
+    page += "<h1>MTG League Season</h1>"
+    page += '<select id="setname" onchange="newSeason.updateStatus()">'
     for set in sets:
         setId = set.code
         setInfo = "%s [%s - %s]" % (set.name, set.type, set.release_date)
         page += "<option value='%s'>%s</option>" % (setId, setInfo)
     page += '</select>'
-    page += '<button onclick="newseason.send()">create</button><br/>'
-    page += '<div>status: <div id="status"></div></div>'
+    page += '<button onclick="newSeason.send()" id="createButton">create</button><br/>'
+    page += '<div>status: <span id="status"></div>'
+    page += "<script type='text/javascript''>window.onload = newSeason.updateStatus()</script>"
     return page
 
         
