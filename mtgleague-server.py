@@ -7,6 +7,7 @@ import functools
 import json
 from mtgsdk import Card
 from mtgsdk import Set
+import pdb
 import os
 import random
 import uuid
@@ -55,13 +56,14 @@ def admin():
 class JsonSerializable:
     def shouldSerialize(self, k):
         return True
-    
-    def valueToJson(self, v):
+
+    @staticmethod
+    def valueToJson(v):
         # print("valueToJson(%s)" % v)
         if getattr(v, 'toJson', False):
             v = v.toJson()
         elif isinstance(v, list):
-            v = [self.valueToJson(v_el) for v_el in v]
+            v = [JsonSerializable.valueToJson(v_el) for v_el in v]
         return v
     
     def toJson(self):
@@ -73,8 +75,8 @@ class JsonSerializable:
                 data[k] = v
         return [type(self).__name__, data]
 
-    @classmethod
-    def jsonToValue(classobj, jsonData):
+    @staticmethod
+    def jsonToValue(jsonData):
         # print ("jsonToValue(%s)" % jsonData)
         if isinstance(jsonData, list) and len(jsonData) > 0:
             serializableClass = next((c for c in serializableClasses.classes if c.__name__ == jsonData[0]), False)
@@ -82,7 +84,7 @@ class JsonSerializable:
                 if hasattr(serializableClass, 'fromJson'):
                     jsonData = serializableClass.fromJson(jsonData)
             else:
-                jsonData = [classobj.jsonToValue(el) for el in jsonData]
+                jsonData = [JsonSerializable.jsonToValue(el) for el in jsonData]
             
         return jsonData
     
@@ -114,8 +116,9 @@ def jsonSerializableObj(cls):
 class PersistentObject:
     savepath = ""
     def save(self):
-        assert isinstance(self, JsonSerializable)
-        json.dump(self.toJson(), open(self.savepath, "w+"))
+        # pdb.set_trace()
+        jsondata = self.toJson()
+        json.dump(jsondata, open(self.savepath, "w+"))
 
     @classmethod
     def load(classObj):
@@ -184,6 +187,8 @@ def player():
 
 @jsonSerializableObj
 class Season():
+    ###########################################################################
+    ## Season.PlayerInfo
     @jsonSerializableObj
     class PlayerInfo():
         def __init__(self, id = "", deckColors = []):
@@ -195,6 +200,8 @@ class Season():
         def __str__(self):
             return "[pinfo id: %s colors: %s, paid: %d]" % (self.playerId, self.deckColors, self.paid)
 
+    ###########################################################################
+    ## Season.Match
     @jsonSerializableObj
     class Match():
         def __init__(self, p1 = "", p2 = "", week=0):
@@ -219,6 +226,7 @@ class Season():
         self.rarePool = []
         self.db = db
         self.startDate = datetime.datetime.now().isoformat(' ')
+        self.seasonLength = 7
     
     def __str__(self):
         return "[season set: %s, players: %d, rarePool: %d]" % (self.set, len(self.registeredPlayers), len(self.rarePool))
@@ -237,7 +245,8 @@ class Season():
         matchups = [random.sample(playerMatchups, len(playerMatchups)) for playerMatchups in matchups]
         
         for playerMatchups in matchups:
-            weekNum = min(7, len(matchups[0]))
+            weekNum = min(self.seasonLength, len(matchups[0]))
+            self.seasonLength = weekNum # if not enough players, will be lower
             for w in range(weekNum):
                 nextOpponent = next((m for m in playerMatchups if not self.isMatchup(m.p1, m.p2)), False)
                 if nextOpponent:
@@ -319,7 +328,7 @@ class SeasonsDB(PersistentObject):
         return True
 
     def getSeason(self, setname):
-        for s in self.season:
+        for s in self.seasons:
             if (s.set == setname):
                 return s
         return False
@@ -335,11 +344,26 @@ class SeasonsDB(PersistentObject):
     def reset():
         SeasonsDB().save()
 
-@app.route('/season-api', methods=['POST', 'GET'])
-def season():
+###############################################################################
+## /players_api
+
+@app.route('/players_api', methods=['POST', 'GET'])
+def players_api():
     cmd = request.args.get('cmd','')
-    seasons = SeasonsDB.load()
-    currentSeason = seasons.getLatestSeason()
+    playersDB = PlayersDB.load()
+    if cmd == 'getDB':
+        return json.dumps(playersDB.toJson()), 200
+    else:
+        return 'invalid cmd', 400 # bad request
+
+###############################################################################
+## /season_api
+
+@app.route('/season_api', methods=['POST', 'GET'])
+def season_api():
+    cmd = request.args.get('cmd','')
+    seasonsDB = SeasonsDB.load()
+    currentSeason = seasonsDB.getLatestSeason()
     if cmd == 'register':
         name = request.args.get('player','')
         if not currentSeason:
@@ -354,28 +378,41 @@ def season():
         if set == "":
             return "invalid set name...", 406 # not acceptable
         else:
-            if seasons.newSeason(set):
+            if seasonsDB.newSeason(set):
                 return "started season: %s" % set, 201 # created
             else:
                 return "couldn't start new season %s" % set, 406 # not acceptable
-    elif cmd == 'isExisting':
+    elif cmd == 'getSeason':
         set = request.args.get('set','')
-        season = next((s for s in seasons.seasons if s.set == set), False)
-        return season.startDate if bool(season) else "false", 200 # OK
+        season = next((s for s in seasonsDB.seasons if s.set == set), False)
+        if not bool(season):
+            return 'false', 200
+        else:
+            return json.dumps(season.toJson()), 200
 
     elif cmd == 'getMatches':
         set = request.args.get('seasonSet','')
         week = request.args.get('week','')
-        season = next((s for s in seasons.seasons if s.set == set), False)
+        season = next((s for s in seasonsDB.seasons if s.set == set), False)
         if not bool(season) or week == '':
             return "bad request", 406 # not acceptable
-        # return [m for m in season.matches if m.week == week]
-        return 'todo', 200
+        return JsonSerializable.valueToJson([m for m in season.matches if m.week == week]), 200
+
+    elif cmd == 'reset':
+        set = request.args.get('set','')
+        sure = request.args.get('AREYOUSURE','')
+        if sure == "YES":
+            seasonsDB.seasons = [s for s in seasonsDB.seasons if s.set != set]
+            seasonsDB.save()
+            return "", 200
     
     return "unknown command", 400 # bad request
 
+###############################################################################
+## /season
+
 @app.route('/season', methods=['POST', 'GET'])
-def newseason():
+def season():
     page = ""
     sets = Set.all()
     sets = [s for s in sets if s.type == 'core' or s.type == 'expansion']
@@ -388,11 +425,30 @@ def newseason():
         setInfo = "%s [%s - %s]" % (set.name, set.type, set.release_date)
         page += "<option value='%s'>%s</option>" % (setId, setInfo)
     page += '</select>'
-    page += '<button onclick="newSeason.send()" id="createButton">create</button><br/>'
+    page += '<button onclick="newSeason.create()" id="createButton">create</button>'
+    page += '<button onclick="newSeason.reset()" id="resetButton">reset</button>'
+    page += '<br/>'
     page += '<div>status: <span id="status"></div>'
+    page += '<div id="SeasonContent">'
+    page += '<div id="Players"><h2>Players</h2>'
+    page += '<div id="player-registration">'
+    page += '<input type="text" id="newPlayerName" placeholder="Please use your office login"/><button onclick="newSeason.registerPlayer()">register</button>'
+    page += '<table id="players-table"></table>'
+    page += '</div>' # player-registration
+    page += '</div>' # Players
+    page += '<div id="Matches"><h2>Matches</h2><select id="match-week" onchange="newSeason.updateMatches()"></select>'
+    page += '<table id="match-table"></table>'
+    page += '</div>' # Matches
+    page += '</div>' # SeasonContent
     page += "<script type='text/javascript''>window.onload = newSeason.updateStatus()</script>"
     return page
 
+###############################################################################
+## /reset
+
+# @app.route('/reset', methods=['POST', 'GET'])
+# def reset():
+    
         
 ###############################################################################
 ## main
