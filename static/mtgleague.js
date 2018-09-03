@@ -1,6 +1,6 @@
 class newSeason
 {
-	static send()
+	static create()
 	{
 		var setnameOption = document.getElementById('setname');
 		var setid = setnameOption.value
@@ -11,12 +11,34 @@ class newSeason
 				if (xhttp.readyState != 4)
 					return;
 				var color = xhttp.status == 201 ? "green" : "red"
-				newSeason.setStatus(xhttp.responseText, false);
+				newSeason.setStatus(xhttp.responseText, false, "green");
 			};
-			xhttp.open("GET", "/season-api?cmd=new&set="+setid, true);
+			xhttp.open("GET", "/season_api?cmd=new&set="+setid, true);
 			xhttp.send();
 		}
 	}
+
+	static reset()
+	{
+		var setnameOption = document.getElementById('setname');
+		var setid = setnameOption.value
+		if (setnameOption)
+		{
+			if (window.confirm("Are you sure you want to reset season '"+setid+"'?"))
+			{
+				var xhttp =  new XMLHttpRequest();
+				xhttp.onreadystatechange = function() {
+					if (xhttp.readyState != 4)
+						return;
+					alert("season reset")
+					newSeason.updateStatus()
+				};
+				xhttp.open("GET", "/season_api?cmd=reset&set="+setid+"&AREYOUSURE=YES", true);
+				xhttp.send();
+			}
+		}
+	}
+
 
 	static updateStatus()
 	{
@@ -27,21 +49,167 @@ class newSeason
 			if (xhttp.readyState != 4)
 				return;
 			var isExisting = xhttp.responseText != "false"
-			var color = isExisting ? "red" : "green"
-			var msg = isExisting ? "Season already started on " + xhttp.responseText + "..." : "Set available"
-			newSeason.setStatus(msg, !isExisting, color)
+			if (isExisting)
+				newSeason.selectedSeason = JSON.parse(xhttp.responseText)
+			else
+				newSeason.selectedSeason = null
+
+			newSeason.updateStatusWithSeason()
 		};
-		xhttp.open("GET", "/season-api?cmd=isExisting&set="+setid, true);
+		xhttp.open("GET", "/season_api?cmd=getSeason&set="+setid, true);
 		xhttp.send();		
 	}
 
-	static setStatus(status, okToSend, color)
+	static updatePlayersDB()
+	{
+		if (newSeason.playersDBRequest != null)
+			return;
+		
+		newSeason.playersDBRequest =  new XMLHttpRequest();
+		newSeason.playersDBRequest.onreadystatechange = function() {
+			if (newSeason.playersDBRequest.readyState != 4)
+				return;
+
+			if (newSeason.playersDBRequest.status != 200)
+				newSeason.playersDB = null
+			else
+			{
+				var db = JSON.parse(newSeason.playersDBRequest.responseText)
+				newSeason.playersDB = db ? db[1] : null
+				newSeason.updateStatusWithSeason()
+			}
+			newSeason.playersDBRequest = null
+		};
+		newSeason.playersDBRequest.open("GET", "/players_api?cmd=getDB", true);
+		newSeason.playersDBRequest.send();		
+	}
+
+	static getPlayerNameFromId(id)
+	{
+		if (newSeason.playersDB == null)
+			return id
+
+		for(var i=0; i<newSeason.playersDB.players.length; ++i)
+		{
+			var playerData = newSeason.playersDB.players[i][1]
+			if (playerData.id == id)
+				return playerData.name
+		}
+		return id
+	}
+
+	static deleteAllChilds(element)
+	{
+		while(element.firstChild)
+			element.removeChild(element.firstChild);
+	}
+
+	static updateStatusWithSeason()
+	{
+		var seasonContent = document.getElementById('SeasonContent');
+		if (newSeason.selectedSeason == null)
+		{
+			newSeason.setStatus("Set available", true, "green")
+			seasonContent.style.display = 'none'
+			return;
+		}
+		else if (newSeason.playersDB == null)
+		{
+			newSeason.updatePlayersDB()
+			return;
+		}
+		var season = newSeason.selectedSeason[1]
+		newSeason.setStatus(season['startDate'], false, "red")
+
+		seasonContent.style.display = 'block'
+
+		// Players
+		var playersTable = document.getElementById("players-table")
+		{
+			newSeason.deleteAllChilds(playersTable)
+
+			var thead = playersTable.createTHead();
+			thead.innerHTML = "<td>Name</td><td>Rare Tokens</td>"
+
+			var tbody = document.createElement("tbody")
+			playersTable.appendChild(tbody)
+
+			for(var i=0; i<season.registeredPlayers.length; ++i)
+			{
+				var playerData = season.registeredPlayers[i][1]
+				var row = tbody.insertRow(-1)
+				var playerName = newSeason.getPlayerNameFromId(playerData.playerId)
+				row.innerHTML = "<td>"+playerName+"</td><td>"+playerData.rareTokens+"</td>"
+			}
+		}
+
+		// Matches
+		var matches = season['matches']
+		var matchesEl = document.getElementById('Matches');
+		if (matches == null || matches.length == 0)
+			matchesEl.style.display = 'none'
+		else
+		{
+			matchesEl.style.display = 'block'
+
+			var matchWeekOption = document.getElementById('match-week')
+			newSeason.deleteAllChilds(matchWeekOption)
+
+			for(var w=0; w<season.seasonLength; ++w)
+			{
+				var weekOption = document.createElement("option")
+				weekOption.value = w
+				weekOption.textContent = "Week "+(w+1)
+				matchWeekOption.appendChild(weekOption)
+			}
+			newSeason.updateMatches()
+		}
+	}
+
+	static setStatus(status, okToCreate, color)
 	{
 		var statusEl = document.getElementById('status');
 		statusEl.textContent = status
 		statusEl.style.color = color
 
 		var button = document.getElementById('createButton');
-		button.style.display = okToSend ? 'inline' : 'none'
+		button.style.display = okToCreate ? 'inline' : 'none'
+
+		var button = document.getElementById('resetButton');
+		button.style.display = okToCreate ? 'none' : 'inline'
+	}
+
+	static updateMatches()
+	{
+		if (newSeason.selectedSeason == null)
+			return;
+		
+		var matchWeekOption = document.getElementById('match-week')
+		var weekNum = matchWeekOption.value
+		var matches = newSeason.selectedSeason[1]['matches']
+		var matchTable = document.getElementById('match-table');
+		newSeason.deleteAllChilds(matchTable)
+
+		var thead = matchTable.createTHead();
+		thead.innerHTML = "<td>Player1</td><td>Score</td><td>Player2</td><td>Score</td>"
+
+		var tbody = document.createElement("tbody")
+		matchTable.appendChild(tbody)
+		for(var i=0; i<matches.length; ++i)
+		{
+			var matchData = matches[i][1]
+			if (matchData.week != weekNum)
+				continue;
+			var row = tbody.insertRow(-1)
+			var p1Name = newSeason.getPlayerNameFromId(matchData.p1)
+			var p2Name = newSeason.getPlayerNameFromId(matchData.p2)
+			row.innerHTML = "<td>"+p1Name+"</td><td>"+matchData.score[0]+"</td><td>"
+				+p2Name+"</td><td>"+matchData.score[1]+"</td>"
+		}
 	}
 }
+newSeason.selectedSeason = null		// static var def
+newSeason.playersDB = null			// static var def
+newSeason.playersDBRequest = null	// static var def
+
+
