@@ -104,6 +104,36 @@ class newSeason
 			element.removeChild(element.firstChild);
 	}
 
+	static registerPlayer()
+	{
+		var setnameOption = document.getElementById('setname');
+		var setid = setnameOption.value
+		var nameInput = document.getElementById('newPlayerName')
+		var xhttp =  new XMLHttpRequest();
+		xhttp.onreadystatechange = function() {
+			if (xhttp.readyState != 4)
+				return;
+			newSeason.playersDB = null // invalidate players cached data
+			newSeason.updateStatus()
+		};
+		xhttp.open("GET", "/season_api?cmd=register&set="+setid+"&player="+nameInput.value, true);
+		xhttp.send();
+	}
+
+	static deletePlayer(playerId)
+	{
+		var setnameOption = document.getElementById('setname');
+		var setid = setnameOption.value
+		var xhttp =  new XMLHttpRequest();
+		xhttp.onreadystatechange = function() {
+			if (xhttp.readyState != 4)
+				return;
+			newSeason.updateStatus()
+		};
+		xhttp.open("GET", "/season_api?cmd=unregister&set="+setid+"&playerId="+playerId, true);
+		xhttp.send();
+	}
+
 	static updateStatusWithSeason()
 	{
 		var seasonContent = document.getElementById('SeasonContent');
@@ -139,7 +169,9 @@ class newSeason
 				var playerData = season.registeredPlayers[i][1]
 				var row = tbody.insertRow(-1)
 				var playerName = newSeason.getPlayerNameFromId(playerData.playerId)
-				row.innerHTML = "<td>"+playerName+"</td><td>"+playerData.rareTokens+"</td>"
+				row.innerHTML = "<td>"+playerName+"</td>"
+					+"<td>"+playerData.rareTokens+"</td>"
+					+"<td><button onclick='newSeason.deletePlayer(\""+playerData.playerId+"\")'>X</button></td>"
 			}
 		}
 
@@ -211,5 +243,3 @@ class newSeason
 newSeason.selectedSeason = null		// static var def
 newSeason.playersDB = null			// static var def
 newSeason.playersDBRequest = null	// static var def
-
-
