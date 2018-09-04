@@ -10,8 +10,7 @@ class newSeason
 			xhttp.onreadystatechange = function() {
 				if (xhttp.readyState != 4)
 					return;
-				var color = xhttp.status == 201 ? "green" : "red"
-				newSeason.setStatus(xhttp.responseText, false, "green");
+				newSeason.updateStatus()
 			};
 			xhttp.open("GET", "/season_api?cmd=new&set="+setid, true);
 			xhttp.send();
@@ -134,6 +133,20 @@ class newSeason
 		xhttp.send();
 	}
 
+	static advance()
+	{
+		var setnameOption = document.getElementById('setname');
+		var setid = setnameOption.value
+		var xhttp =  new XMLHttpRequest();
+		xhttp.onreadystatechange = function() {
+			if (xhttp.readyState != 4)
+				return;
+			newSeason.updateStatus()
+		};
+		xhttp.open("GET", "/season_api?cmd=advance&set="+setid, true);
+		xhttp.send();
+	}
+
 	static updateStatusWithSeason()
 	{
 		var seasonContent = document.getElementById('SeasonContent');
@@ -153,7 +166,30 @@ class newSeason
 
 		seasonContent.style.display = 'block'
 
+		var seasonState = season.state[1].state
+		var seasonWeek = season.state[1].week
+		var stateStr = "[Week: "+(seasonWeek+1)+"]"
+		if (seasonState == 0)
+			stateStr = "[Registration]"
+		else if (seasonState == 1)
+			stateStr = "[PreSeason]"
+		else if (seasonState == 3)
+			stateStr = "[Playoffs]"
+		else if (seasonState >= 4)
+			stateStr = "[Finished]"
+
+		var stateEl = document.getElementById('season-state')
+		stateEl.textContent = stateStr
+
 		// Players
+		var canRegister = seasonState == 0
+		var playerRegistrationEl = document.getElementById('player-registration')
+		playerRegistrationEl.style.display = canRegister ? 'block' : 'none'
+
+		var isFinished = seasonState >= 4
+		var advanceButton = document.getElementById('advanceButton')
+		advanceButton.style.display = isFinished ? 'none' : 'inline'
+		
 		var playersTable = document.getElementById("players-table")
 		{
 			newSeason.deleteAllChilds(playersTable)
@@ -169,9 +205,10 @@ class newSeason
 				var playerData = season.registeredPlayers[i][1]
 				var row = tbody.insertRow(-1)
 				var playerName = newSeason.getPlayerNameFromId(playerData.playerId)
+				var removeButtonStr = "<td><button onclick='newSeason.deletePlayer(\""+playerData.playerId+"\")'>X</button></td>"
 				row.innerHTML = "<td>"+playerName+"</td>"
-					+"<td>"+playerData.rareTokens+"</td>"
-					+"<td><button onclick='newSeason.deletePlayer(\""+playerData.playerId+"\")'>X</button></td>"
+					+ "<td>"+playerData.rareTokens+"</td>"
+					+ (canRegister ? removeButtonStr : "")
 			}
 		}
 
@@ -184,31 +221,35 @@ class newSeason
 		{
 			matchesEl.style.display = 'block'
 
-			var matchWeekOption = document.getElementById('match-week')
-			newSeason.deleteAllChilds(matchWeekOption)
+			var matchWeekSelectEl = document.getElementById('match-week')
+			newSeason.deleteAllChilds(matchWeekSelectEl)
 
 			for(var w=0; w<season.seasonLength; ++w)
 			{
 				var weekOption = document.createElement("option")
 				weekOption.value = w
 				weekOption.textContent = "Week "+(w+1)
-				matchWeekOption.appendChild(weekOption)
+				matchWeekSelectEl.appendChild(weekOption)
 			}
+			matchWeekSelectEl.selectedIndex = seasonWeek
 			newSeason.updateMatches()
 		}
 	}
 
 	static setStatus(status, okToCreate, color)
 	{
-		var statusEl = document.getElementById('status');
+		var statusEl = document.getElementById('status')
 		statusEl.textContent = status
 		statusEl.style.color = color
 
-		var button = document.getElementById('createButton');
+		var button = document.getElementById('createButton')
 		button.style.display = okToCreate ? 'inline' : 'none'
 
-		var button = document.getElementById('resetButton');
+		var button = document.getElementById('resetButton')
 		button.style.display = okToCreate ? 'none' : 'inline'
+
+		var stateDiv = document.getElementById('season-state-div')
+		stateDiv.style.display = okToCreate ? 'none' : 'block'
 	}
 
 	static updateMatches()

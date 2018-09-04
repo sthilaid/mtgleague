@@ -118,7 +118,9 @@ class PersistentObject:
     def save(self):
         # pdb.set_trace()
         jsondata = self.toJson()
-        json.dump(jsondata, open(self.savepath, "w+"))
+        jsonStr = json.dumps(jsondata)
+        with open(self.savepath, "w+") as file:
+            file.write(jsonStr)
 
     @classmethod
     def load(classObj):
@@ -219,6 +221,61 @@ class Season():
             p2 = next((p.name for p in players.players if p.id == self.p2), False)
             return "[match week %d: %s %d vs %s %d]" % (self.week, p1, self.score[0], p2, self.score[1])
 
+    ###############################################################################
+    ## Season states
+    @jsonSerializableObj
+    class SeasonState():
+        registration    = 0
+        preseason       = 1
+        started         = 2
+        playoffs        = 3
+        finished        = 4
+
+        def __init__(self, weekCount=7):
+            self.weekCount = weekCount
+            self.state = self.registration
+            self.week = 0
+
+        def advanceState(self):
+            if self.state == self.finished:
+                return
+            elif self.state != self.started:
+                self.state += 1
+            else:
+                self.week += 1
+                if self.week == self.weekCount:
+                    self.state += 1
+
+        def isInRegistration(self):
+            return self.state == 0
+
+        def isInPreseason(self):
+            return self.state == 1
+
+        def isStarted(self):
+            return self.state == 2
+
+        def isInPlayoffs(self):
+            return self.state == 3
+
+        def isFinished(self):
+            return self.state == 4
+
+        def __str__(self):
+            if self.state == 0:
+                return "[SeasonState: registration]"
+            elif self.state == 1:
+                return "[SeasonState: preseason]"
+            elif self.state == 2:
+                return "[SeasonState: started week: %d]" % self.week
+            elif self.state == 3:
+                return "[SeasonState: playoffs]"
+            elif self.state == 4:
+                return "[SeasonState: finished]"
+         
+    ###############################################################################
+    ## Season impl
+
     def __init__(self, db = None, setname = ""):
         self.set = setname
         self.registeredPlayers = []
@@ -227,6 +284,7 @@ class Season():
         self.db = db
         self.startDate = datetime.datetime.now().isoformat(' ')
         self.seasonLength = 7
+        self.state = self.SeasonState()
     
     def __str__(self):
         return "[season set: %s, players: %d, rarePool: %d]" % (self.set, len(self.registeredPlayers), len(self.rarePool))
@@ -236,6 +294,14 @@ class Season():
             return False
         else:
             return super().shouldSerialize(k)
+
+    def advanceState(self):
+        prevState = self.state.state
+        self.state.advanceState()
+        newState = self.state.state
+        if newState == self.SeasonState.preseason:
+            self.generateMatches()
+        self.db.save()
 
     def isMatchup(self, p1, p2):
         return next((m for m in self.matches if m.isMatchup(p1, p2)), False)
@@ -419,8 +485,13 @@ def season_api():
         if season and season.unregisterPlayer(playerId):
             return 'done', 200
         return 'failed to delete player %s' % playerId, 400 # bad request
-            
-    
+    elif cmd == 'advance':
+        set = request.args.get('set','')
+        season = seasonsDB.getSeason(set)
+        if season:
+            season.advanceState()
+            return "OK", 200
+        
     return "unknown command", 400 # bad request
 
 ###############################################################################
@@ -444,12 +515,15 @@ def season():
     page += '<button onclick="newSeason.reset()" id="resetButton">reset</button>'
     page += '<br/>'
     page += '<div>status: <span id="status"></div>'
+    page += '<div id="season-state-div">state: <span id="season-state"></span>'
+    page += '<button onclick="newSeason.advance()" id="advanceButton">advance</button>'
+    page += '</div>' # season-state
     page += '<div id="SeasonContent">'
     page += '<div id="Players"><h2>Players</h2>'
     page += '<div id="player-registration">'
     page += '<input type="text" id="newPlayerName" placeholder="Please use your office login"/><button onclick="newSeason.registerPlayer()">register</button>'
-    page += '<table id="players-table"></table>'
     page += '</div>' # player-registration
+    page += '<table id="players-table"></table>'
     page += '</div>' # Players
     page += '<div id="Matches"><h2>Matches</h2><select id="match-week" onchange="newSeason.updateMatches()"></select>'
     page += '<table id="match-table"></table>'
