@@ -1,4 +1,4 @@
-#!flask/bin/python
+#!python
 
 import datetime
 from flask import Flask
