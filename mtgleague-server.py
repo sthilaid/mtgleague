@@ -273,6 +273,11 @@ class Season():
             self.registeredPlayers += [Season.PlayerInfo(playerData.id, deckColors)]
         self.db.save()
 
+    def unregisterPlayer(self, id):
+        self.registeredPlayers = [p for p in self.registeredPlayers if p.playerId != id]
+        self.db.save()
+        return True
+
     def getPlayerInfo(self, id):
         for p in self.registeredPlayers:
             if p.playerId == id:
@@ -365,13 +370,15 @@ def season_api():
     seasonsDB = SeasonsDB.load()
     currentSeason = seasonsDB.getLatestSeason()
     if cmd == 'register':
+        set = request.args.get('set','')
         name = request.args.get('player','')
-        if not currentSeason:
+        season = seasonsDB.getSeason(set)
+        if not season:
             return "no seasons started", 404 # not found
         elif name == "":
             return "invalid player name", 406 # not acceptable
         else:
-            currentSeason.registerPlayer(name)
+            season.registerPlayer(name)
             return "registered player: %s" % name, 200 # OK
     elif cmd == 'new':
         set = request.args.get('set','')
@@ -405,6 +412,14 @@ def season_api():
             seasonsDB.seasons = [s for s in seasonsDB.seasons if s.set != set]
             seasonsDB.save()
             return "", 200
+    elif cmd == 'unregister':
+        set = request.args.get('set','')
+        playerId = request.args.get('playerId','')
+        season = seasonsDB.getSeason(set)
+        if season and season.unregisterPlayer(playerId):
+            return 'done', 200
+        return 'failed to delete player %s' % playerId, 400 # bad request
+            
     
     return "unknown command", 400 # bad request
 
@@ -440,7 +455,16 @@ def season():
     page += '<table id="match-table"></table>'
     page += '</div>' # Matches
     page += '</div>' # SeasonContent
-    page += "<script type='text/javascript''>window.onload = newSeason.updateStatus()</script>"
+    page += '''
+<script type='text/javascript'>
+    window.onload = newSeason.updateStatus()
+    var playerNameInput = document.getElementById('newPlayerName')
+    playerNameInput.addEventListener("keydown", function(evt) {
+                                                    if (evt.keyCode == 13) {
+                                                        newSeason.registerPlayer() ;
+                                                        playerNameInput.value=""
+                                                }})
+</script>'''
     return page
 
 ###############################################################################
