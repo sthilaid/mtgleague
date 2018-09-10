@@ -272,6 +272,15 @@ class Season():
                 return "[SeasonState: playoffs]"
             elif self.state == 4:
                 return "[SeasonState: finished]"
+
+    ###############################################################################
+    ## Rare pool card
+    @jsonSerializableObj
+    class RarePoolCard():
+        def __init__(self, id=0):
+            self.id = id
+            self.count = 1
+
          
     ###############################################################################
     ## Season impl
@@ -301,6 +310,20 @@ class Season():
         newState = self.state.state
         if newState == self.SeasonState.preseason:
             self.generateMatches()
+        self.db.save()
+
+    def exchangeRareForToken(self, playerId, cardId):
+        rare = next((r for r in self.rarePool if r.id == cardId), False)
+        if rare:
+            rare.count += 1
+        else:
+            self.rarePool += [RarePoolCard(cardId)]
+
+        playerInfo = self.getPlayerInfo(playerId)
+        if not playerInfo:
+            return False
+
+        playerInfo.rareTokens += 1
         self.db.save()
 
     def isMatchup(self, p1, p2):
@@ -345,10 +368,8 @@ class Season():
         return True
 
     def getPlayerInfo(self, id):
-        for p in self.registeredPlayers:
-            if p.playerId == id:
-                return p
-        assert False, "Unknown player %s" % id
+        pInfo = next((p for p in self.registeredPlayers if p.playerId == id), False)
+        return pInfo
 
     def addToRaresPool(self, cardIds):
         for newRareId in cardIds:
