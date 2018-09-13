@@ -181,37 +181,57 @@ class newSeason
 		var stateEl = document.getElementById('season-state')
 		stateEl.textContent = stateStr
 
+        // ---------------------------
 		// Players
-		var canRegister = seasonState == 0
-		var playerRegistrationEl = document.getElementById('player-registration')
-		playerRegistrationEl.style.display = canRegister ? 'block' : 'none'
+        {
+		    var canRegister = seasonState == 0
+		    var playerRegistrationEl = document.getElementById('player-registration')
+		    playerRegistrationEl.style.display = canRegister ? 'block' : 'none'
 
-		var isFinished = seasonState >= 4
-		var advanceButton = document.getElementById('advanceButton')
-		advanceButton.style.display = isFinished ? 'none' : 'inline'
-		
-		var playersTable = document.getElementById("players-table")
-		{
-			newSeason.deleteAllChilds(playersTable)
+		    var isFinished = seasonState >= 4
+		    var advanceButton = document.getElementById('advanceButton')
+		    advanceButton.style.display = isFinished ? 'none' : 'inline'
+		    
+		    var playersTable = document.getElementById("players-table")
+		    {
+			    newSeason.deleteAllChilds(playersTable)
 
-			var thead = playersTable.createTHead();
-			thead.innerHTML = "<td>Name</td><td>Rare Tokens</td>"
+			    var thead = playersTable.createTHead();
+			    thead.innerHTML = "<td>Name</td><td>Rare Tokens</td>"
 
-			var tbody = document.createElement("tbody")
-			playersTable.appendChild(tbody)
+			    var tbody = document.createElement("tbody")
+			    playersTable.appendChild(tbody)
 
-			for(var i=0; i<season.registeredPlayers.length; ++i)
-			{
-				var playerData = season.registeredPlayers[i][1]
-				var row = tbody.insertRow(-1)
-				var playerName = newSeason.getPlayerNameFromId(playerData.playerId)
-				var removeButtonStr = "<td><button onclick='newSeason.deletePlayer(\""+playerData.playerId+"\")'>X</button></td>"
-				row.innerHTML = "<td>"+playerName+"</td>"
-					+ "<td>"+playerData.rareTokens+"</td>"
-					+ (canRegister ? removeButtonStr : "")
-			}
-		}
+			    for(var i=0; i<season.registeredPlayers.length; ++i)
+			    {
+				    var playerData = season.registeredPlayers[i][1]
+				    var row = tbody.insertRow(-1)
+				    var playerName = newSeason.getPlayerNameFromId(playerData.playerId)
+				    var removeButtonStr = "<td><button onclick='newSeason.deletePlayer(\""+playerData.playerId+"\")'>X</button></td>"
+				    row.innerHTML = "<td>"+playerName+"</td>"
+					    + "<td>"+playerData.rareTokens+"</td>"
+					    + (canRegister ? removeButtonStr : "")
+			    }
+		    }
+        }
 
+        // ---------------------------
+		// RarePool
+        {
+            var rarePoolTable = document.getElementById('rarepool-table');
+            var tbody = document.createElement("tbody")
+		    rarePoolTable.appendChild(tbody)
+            
+            for(var i=0; i<season.rarePool.length; ++i)
+		    {
+			    var poolCard = season.rarePool[i][1]
+			    var row = tbody.insertRow(-1)
+			    row.innerHTML = "<td>"+poolCard.id+"</td>"
+				    + "<td>"+poolCard.count+"</td>"
+		    }
+        }
+
+        // ---------------------------
 		// Matches
 		var matches = season['matches']
 		var matchesEl = document.getElementById('Matches');
