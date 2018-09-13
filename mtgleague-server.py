@@ -25,7 +25,7 @@ def getCards():
 def index():
     txt = "<table>"
     for c in getCards():
-        txt += "<tr><td><img src=\'"+ c.image_url +"'></td></tr>"
+        txt += "<tr><td><img src=\'"+ c.image_url +"'></td><td>"+ str(c.multiverse_id) +"</td></tr>"
     txt += "</table>"
     return txt
 
@@ -281,10 +281,12 @@ class Season():
             self.id = id
             self.count = 1
 
+        def __str__(self):
+            return "[RarePoolCard id: %s count: %d]" % (self.id, self.count)
+
          
     ###############################################################################
     ## Season impl
-
     def __init__(self, db = None, setname = ""):
         self.set = setname
         self.registeredPlayers = []
@@ -313,17 +315,25 @@ class Season():
         self.db.save()
 
     def exchangeRareForToken(self, playerId, cardId):
-        rare = next((r for r in self.rarePool if r.id == cardId), False)
-        if rare:
-            rare.count += 1
-        else:
-            self.rarePool += [RarePoolCard(cardId)]
+        card = False
+        try: card = Card.find(cardId)
+        except: pass
+        if not card or (card.rarity != 'Rare' and card.rarity != 'Mythic Rare'):
+            return False
 
         playerInfo = self.getPlayerInfo(playerId)
         if not playerInfo:
             return False
+        
+        cardTokenValue = 2 if card and card.rarity == 'Mythic Rare' else 1
+        playerInfo.rareTokens += cardTokenValue
 
-        playerInfo.rareTokens += 1
+        rare = next((r for r in self.rarePool if r.id == cardId), False)
+        if rare:
+            rare.count += 1
+        else:
+            self.rarePool += [self.RarePoolCard(cardId)]
+        
         self.db.save()
 
     def isMatchup(self, p1, p2):
@@ -391,6 +401,8 @@ class Season():
         self.rarePool = [r for r in self.rarePool if r['count'] > 0]
         self.db.save()
 
+###############################################################################
+## SeasonsDB
 @jsonSerializableObj
 class SeasonsDB(PersistentObject):
     savepath = 'seasons.dat'
@@ -438,7 +450,6 @@ class SeasonsDB(PersistentObject):
 
 ###############################################################################
 ## /players_api
-
 @app.route('/players_api', methods=['POST', 'GET'])
 def players_api():
     cmd = request.args.get('cmd','')
@@ -450,7 +461,6 @@ def players_api():
 
 ###############################################################################
 ## /season_api
-
 @app.route('/season_api', methods=['POST', 'GET'])
 def season_api():
     cmd = request.args.get('cmd','')
@@ -517,40 +527,45 @@ def season_api():
 
 ###############################################################################
 ## /season
-
 @app.route('/season', methods=['POST', 'GET'])
 def season():
     page = ""
     sets = Set.all()
     sets = [s for s in sets if s.type == 'core' or s.type == 'expansion']
     list.sort(sets, key=lambda s: s.release_date, reverse=True)
-    page += "<script src='static/mtgleague.js?test=%s'></script>" % uuid.uuid4()
-    page += "<h1>MTG League Season</h1>"
-    page += '<select id="setname" onchange="newSeason.updateStatus()">'
+    page += "<script src='static/mtgleague.js?test=%s'></script>\n" % uuid.uuid4()
+    page += "<h1>MTG League Season</h1>\n"
+    page += '<select id="setname" onchange="newSeason.updateStatus()">\n'
     for set in sets:
         setId = set.code
         setInfo = "%s [%s - %s]" % (set.name, set.type, set.release_date)
-        page += "<option value='%s'>%s</option>" % (setId, setInfo)
-    page += '</select>'
-    page += '<button onclick="newSeason.create()" id="createButton">create</button>'
-    page += '<button onclick="newSeason.reset()" id="resetButton">reset</button>'
-    page += '<br/>'
-    page += '<div>status: <span id="status"></div>'
-    page += '<div id="season-state-div">state: <span id="season-state"></span>'
-    page += '<button onclick="newSeason.advance()" id="advanceButton">advance</button>'
-    page += '</div>' # season-state
-    page += '<div id="SeasonContent">'
-    page += '<div id="Players"><h2>Players</h2>'
-    page += '<div id="player-registration">'
-    page += '<input type="text" id="newPlayerName" placeholder="Please use your office login"/><button onclick="newSeason.registerPlayer()">register</button>'
-    page += '</div>' # player-registration
-    page += '<table id="players-table"></table>'
-    page += '</div>' # Players
-    page += '<div id="Matches"><h2>Matches</h2><select id="match-week" onchange="newSeason.updateMatches()"></select>'
-    page += '<table id="match-table"></table>'
-    page += '</div>' # Matches
-    page += '</div>' # SeasonContent
+        page += "   <option value='%s'>%s</option>\n" % (setId, setInfo)
+    page += '</select>\n'
     page += '''
+<button onclick="newSeason.create()" id="createButton">create</button>
+<button onclick="newSeason.reset()" id="resetButton">reset</button>
+<br/>
+<div>status: <span id="status"></div>
+<div id="season-state-div">state: <span id="season-state"></span>
+    <button onclick="newSeason.advance()" id="advanceButton">advance</button>
+</div>
+<div id="SeasonContent">
+    <div id="Players"><h2>Players</h2>
+        <div id="player-registration">
+            <input type="text" id="newPlayerName" placeholder="Please use your office login"/><button onclick="newSeason.registerPlayer()">register</button>
+        </div>
+        <table id="players-table"></table>
+    </div>
+    <div id="Matches">
+        <h2>Matches</h2>
+        <select id="match-week" onchange="newSeason.updateMatches()"></select>
+        <table id="match-table"></table>
+    </div>
+    <div id="rarepool">
+        <h2>Rare Pool</h2>
+        <table id="rarepool-table"></table>
+    </div>
+</div>
 <script type='text/javascript'>
     window.onload = newSeason.updateStatus()
     var playerNameInput = document.getElementById('newPlayerName')
