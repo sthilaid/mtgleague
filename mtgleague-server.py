@@ -335,6 +335,7 @@ class Season():
             self.rarePool += [self.RarePoolCard(cardId)]
         
         self.db.save()
+        return True
 
     def isMatchup(self, p1, p2):
         return next((m for m in self.matches if m.isMatchup(p1, p2)), False)
@@ -528,7 +529,7 @@ def season_api():
         rares = Card.where(set=currentSet) \
                     .where(rarity='Rare|Mythic Rare') \
                     .all()
-        data = list(map(lambda c: {'id': c.multiverse_id, 'name': c.name}, rares))
+        data = list(map(lambda c: {'id': c.multiverse_id, 'name': c.name, 'url': c.image_url}, rares))
         return json.dumps(data), 200
 
     elif cmd == 'redeemrare':
@@ -583,6 +584,7 @@ def season():
             <select id="rare-sel-player"></select>
             <select id="rare-sel-card"></select>
             <button onclick="newSeason.redeemRare()">redeem</button>
+            <span id="rare-sel-img"></span>
         </div>
         <table id="rarepool-table"></table>
     </div>
