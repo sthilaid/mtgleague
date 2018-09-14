@@ -522,6 +522,22 @@ def season_api():
         if season:
             season.advanceState()
             return "OK", 200
+
+    elif cmd == 'getrares':
+        currentSet = request.args.get('set','')
+        rares = Card.where(set=currentSet) \
+                    .where(rarity='Rare|Mythic Rare') \
+                    .all()
+        data = list(map(lambda c: {'id': c.multiverse_id, 'name': c.name}, rares))
+        return json.dumps(data), 200
+
+    elif cmd == 'redeemrare':
+        set = request.args.get('set','')
+        playerId = request.args.get('player','')
+        cardId = request.args.get('card','')
+        season = seasonsDB.getSeason(set)
+        if season and season.exchangeRareForToken(playerId, cardId):
+            return "OK", 200
         
     return "unknown command", 400 # bad request
 
@@ -563,6 +579,11 @@ def season():
     </div>
     <div id="rarepool">
         <h2>Rare Pool</h2>
+        <div>Redeem Rare:
+            <select id="rare-sel-player"></select>
+            <select id="rare-sel-card"></select>
+            <button onclick="newSeason.redeemRare()">redeem</button>
+        </div>
         <table id="rarepool-table"></table>
     </div>
 </div>

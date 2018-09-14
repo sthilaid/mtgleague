@@ -41,6 +41,8 @@ class newSeason
 
 	static updateStatus()
 	{
+		newSeason.playersDB = null
+		newSeason.rares = null
 		var setnameOption = document.getElementById('setname');
 		var setid = setnameOption.value
 		var xhttp =  new XMLHttpRequest();
@@ -57,6 +59,33 @@ class newSeason
 		};
 		xhttp.open("GET", "/season_api?cmd=getSeason&set="+setid, true);
 		xhttp.send();		
+	}
+
+	static updateRares()
+	{
+		if (newSeason.raresDataRequest != null)
+			return;
+		
+		var setnameOption = document.getElementById('setname');
+		var setid = setnameOption.value
+		if (setnameOption)
+		{
+			newSeason.raresDataRequest =  new XMLHttpRequest();
+			newSeason.raresDataRequest.onreadystatechange = function() {
+				if (newSeason.raresDataRequest.readyState != 4)
+					return;
+				if (newSeason.raresDataRequest.status != 200)
+					newSeason.raresData = null
+				else
+				{
+					newSeason.raresData = JSON.parse(newSeason.raresDataRequest.responseText)
+					newSeason.updateStatusWithSeason()
+				}
+				newSeason.raresDataRequest = null
+			};
+			newSeason.raresDataRequest.open("GET", "/season_api?cmd=getrares&set="+setid, true);
+			newSeason.raresDataRequest.send();
+		}
 	}
 
 	static updatePlayersDB()
@@ -147,6 +176,27 @@ class newSeason
 		xhttp.send();
 	}
 
+	static redeemRare()
+	{
+		var setnameOption = document.getElementById('setname');
+		var setid = setnameOption.value
+
+		var playerNameOption = document.getElementById('rare-sel-player');
+		var playerId = playerNameOption.value
+
+		var cardNameOption = document.getElementById('rare-sel-card');
+		var cardId = cardNameOption.value
+		
+		var xhttp =  new XMLHttpRequest();
+		xhttp.onreadystatechange = function() {
+			if (xhttp.readyState != 4)
+				return;
+			newSeason.updateStatus()
+		};
+		xhttp.open("GET", "/season_api?cmd=redeemrare&set="+setid+"&player="+playerId+"&card="+cardId, true);
+		xhttp.send();		
+	}
+
 	static updateStatusWithSeason()
 	{
 		var seasonContent = document.getElementById('SeasonContent');
@@ -159,6 +209,11 @@ class newSeason
 		else if (newSeason.playersDB == null)
 		{
 			newSeason.updatePlayersDB()
+			return;
+		}
+		else if (newSeason.raresData == null)
+		{
+			newSeason.updateRares();
 			return;
 		}
 		var season = newSeason.selectedSeason[1]
@@ -218,6 +273,24 @@ class newSeason
         // ---------------------------
 		// RarePool
         {
+			var rarePoolPlayerSel = document.getElementById('rare-sel-player');
+			rarePoolPlayerSel.innerHTML = ""
+			for (let i=0; i<season.registeredPlayers.length; ++i)
+			{
+				var playerId = season.registeredPlayers[i][1].playerId
+				var playerName = newSeason.getPlayerNameFromId(playerId)
+				rarePoolPlayerSel.innerHTML += "<option value='" + playerId + "'>"+ playerName + "</option>"
+			}
+
+			var rarePoolCardSel = document.getElementById('rare-sel-card');
+			rarePoolCardSel.innerHTML = ""
+			for (let i=0; i<newSeason.raresData.length; ++i)
+			{
+				var cardId = newSeason.raresData[i].id
+				var cardName = newSeason.raresData[i].name
+				rarePoolCardSel.innerHTML += "<option value='" + cardId + "'>"+ cardName + "</option>"
+			}
+			
             var rarePoolTable = document.getElementById('rarepool-table');
             var tbody = document.createElement("tbody")
 		    rarePoolTable.appendChild(tbody)
@@ -304,3 +377,4 @@ class newSeason
 newSeason.selectedSeason = null		// static var def
 newSeason.playersDB = null			// static var def
 newSeason.playersDBRequest = null	// static var def
+newSeason.raresData = null			// static var def
