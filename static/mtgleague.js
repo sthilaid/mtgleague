@@ -290,8 +290,14 @@ class newSeason
 				var cardName = newSeason.raresData[i].name
 				rarePoolCardSel.innerHTML += "<option value='" + cardId + "'>"+ cardName + "</option>"
 			}
+
+            var rarecardSelImgEl = document.getElementById('rare-sel-img');
+            var rarecardSelImg = newSeason.raresData.find(function(c) { return c.id == rarePoolCardSel.value }).url;
+            rarecardSelImgEl.innerHTML = "<img src='" + rarecardSelImg + "'/>"
 			
             var rarePoolTable = document.getElementById('rarepool-table');
+            newSeason.deleteAllChilds(rarePoolTable)
+
             var tbody = document.createElement("tbody")
 		    rarePoolTable.appendChild(tbody)
             
