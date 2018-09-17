@@ -582,9 +582,9 @@ def season():
         <h2>Rare Pool</h2>
         <div>Redeem Rare:
             <select id="rare-sel-player"></select>
-            <select id="rare-sel-card"></select>
+            <select id="rare-sel-card" onchange="newSeason.updateRareSelImg()"></select>
             <button onclick="newSeason.redeemRare()">redeem</button>
-            <span id="rare-sel-img"></span>
+            <img id="rare-sel-img" src="" alt="no image"/>
         </div>
         <table id="rarepool-table"></table>
     </div>

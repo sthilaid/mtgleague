@@ -193,8 +193,16 @@ class newSeason
 				return;
 			newSeason.updateStatus()
 		};
-		xhttp.open("GET", "/season_api?cmd=redeemrare&set="+setid+"&player="+playerId+"&card="+cardId, true);
-		xhttp.send();		
+		xhttp.open("GET", "/season_api?cmd=redeemrare&set="+setid+"&player="+playerId+"&card="+cardId, true)
+		xhttp.send()
+	}
+
+	static updateRareSelImg()
+	{
+		var rarePoolCardSel = document.getElementById('rare-sel-card')
+		var rarecardSelImgEl = document.getElementById('rare-sel-img')
+        var rarecardSelData = newSeason.raresData.find(function(c) { return c.id == rarePoolCardSel.value })
+		rarecardSelImgEl.src = rarecardSelData ? rarecardSelData.url : ""
 	}
 
 	static updateStatusWithSeason()
@@ -274,6 +282,7 @@ class newSeason
 		// RarePool
         {
 			var rarePoolPlayerSel = document.getElementById('rare-sel-player');
+			var rarePoolPlayerSelValue = rarePoolPlayerSel.value
 			rarePoolPlayerSel.innerHTML = ""
 			for (let i=0; i<season.registeredPlayers.length; ++i)
 			{
@@ -281,8 +290,10 @@ class newSeason
 				var playerName = newSeason.getPlayerNameFromId(playerId)
 				rarePoolPlayerSel.innerHTML += "<option value='" + playerId + "'>"+ playerName + "</option>"
 			}
+			rarePoolPlayerSel.value = rarePoolPlayerSelValue
 
 			var rarePoolCardSel = document.getElementById('rare-sel-card');
+			var rarePoolCardSelValue = rarePoolCardSel.value
 			rarePoolCardSel.innerHTML = ""
 			for (let i=0; i<newSeason.raresData.length; ++i)
 			{
@@ -290,10 +301,9 @@ class newSeason
 				var cardName = newSeason.raresData[i].name
 				rarePoolCardSel.innerHTML += "<option value='" + cardId + "'>"+ cardName + "</option>"
 			}
+			rarePoolCardSel.value = rarePoolCardSelValue
 
-            var rarecardSelImgEl = document.getElementById('rare-sel-img');
-            var rarecardSelImg = newSeason.raresData.find(function(c) { return c.id == rarePoolCardSel.value }).url;
-            rarecardSelImgEl.innerHTML = "<img src='" + rarecardSelImg + "'/>"
+			newSeason.updateRareSelImg()
 			
             var rarePoolTable = document.getElementById('rarepool-table');
             newSeason.deleteAllChilds(rarePoolTable)
